@@ -16,9 +16,9 @@ train_images, c_test = train_images / 255.0, test_images / 255.0
 class_names = ['T-shirt/top', 'Trouser', 'Pullover', 'Dress', 'Coat',
                'Sandal', 'Shirt', 'Sneaker', 'Bag', 'Ankle boot']
 
-plt.figure(figsize=(10,10))
+plt.figure(figsize=(10, 10))
 for i in range(25):
-    plt.subplot(5,5,i+1)
+    plt.subplot(5, 5, i + 1)
     plt.xticks([])
     plt.yticks([])
     plt.grid(False)
@@ -38,23 +38,23 @@ def get_baseline_model():
     # Build the model
     model = tf.keras.Sequential()
     model.add(layers.Conv2D(filters=8,
-                                     kernel_size=(3, 3),
-                                     strides=(1, 1),
-                                     padding='valid',
-                                     activation='relu',
-                                     input_shape=(28, 28, 1)))
+                            kernel_size=(3, 3),
+                            strides=(1, 1),
+                            padding='valid',
+                            activation='relu',
+                            input_shape=(28, 28, 1)))
     model.add(layers.BatchNormalization())
     model.add(layers.Conv2D(filters=16,
-                                     kernel_size=(3, 3),
-                                     strides=(1, 1),
-                                     padding='valid',
-                                     activation='relu'))
+                            kernel_size=(3, 3),
+                            strides=(1, 1),
+                            padding='valid',
+                            activation='relu'))
     model.add(layers.MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
     model.add(layers.Conv2D(filters=32,
-                                     kernel_size=(3, 3),
-                                     strides=(1, 1),
-                                     padding='valid',
-                                     activation='relu'))
+                            kernel_size=(3, 3),
+                            strides=(1, 1),
+                            padding='valid',
+                            activation='relu'))
     model.add(layers.MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
     model.add(layers.Flatten())
     model.add(layers.Dense(128, activation='relu'))
@@ -85,10 +85,10 @@ def insert_layer_after(model, layer_id, new_layer):
     new_model = tf.keras.Model(inputs=layers[0].input, outputs=x)
     return new_model
 
+
 # replacing a layer according to:
 # https://stackoverflow.com/questions/49492255/how-to-replace-or-insert-intermediate-layer-in-keras-model
 def replace_intermediate_layer(model, layer_id, new_layer):
-
     layers = [l for l in model.layers]
 
     x = layers[0].output
@@ -100,6 +100,7 @@ def replace_intermediate_layer(model, layer_id, new_layer):
 
     new_model = tf.keras.Model(inputs=layers[0].input, outputs=x)
     return new_model
+
 
 def get_model4(baseline_model):
     model4 = replace_intermediate_layer(
@@ -114,11 +115,14 @@ def get_model4(baseline_model):
     print(model4.summary())
     compile_model(model4)
     return model4
+
+
 def get_model3(model):
     model3 = insert_layer_after(model, 8, layers.Dropout(0.5))
     print(model3.summary())
     compile_model(model3)
     return model3
+
 
 def get_model2(baseline_model):
     x2 = tf.keras.layers.Flatten()(baseline_model.layers[-4].output)
@@ -131,7 +135,16 @@ def get_model2(baseline_model):
 
 
 def get_model1(baseline_model):
-    model1 = insert_layer_after(baseline_model, 8, tf.keras.layers.Dense(128, activation='relu'))
+    # augment the training data
+    data_augmentation = tf.keras.Sequential([
+        layers.experimental.preprocessing.RandomFlip("horizontal",
+                                                     input_shape=(28,
+                                                                  28,
+                                                                  1)),
+        layers.GaussianNoise(0.1),
+        layers.experimental.preprocessing.RandomContrast(0.1)
+    ])
+    model1 = insert_layer_after(baseline_model, 0, data_augmentation)
     print(model1.summary())
     compile_model(model1)
     return model1
@@ -170,7 +183,7 @@ def show_statistics(true_label, pred_label, model_name='model'):
     print("------------------------------------------")
     print(classification_report(true_label, pred_label))
     print("Accuracy: " + str(accuracy_score(true_label, pred_label)))
-    print("Precision: " + str(precision_score(true_label, pred_label, average='macro', zero_division= 0)))
+    print("Precision: " + str(precision_score(true_label, pred_label, average='macro', zero_division=0)))
     print("Recall: " + str(recall_score(true_label, pred_label, average='macro')))
     print("F1: " + str(f1_score(true_label, pred_label, average='macro')))
     print("------------------------------------------")
@@ -178,7 +191,9 @@ def show_statistics(true_label, pred_label, model_name='model'):
     ConfusionMatrixDisplay(confusion_matrix(true_label, pred_label)).plot()
     plt.show()
 
+
 def main():
+
     baseline_model = get_baseline_model()
 
     train_and_evaluate_model(baseline_model, model_name='baseline_model')
@@ -198,6 +213,7 @@ def main():
 
     model4 = get_model4(baseline_model)
     train_and_evaluate_model(model4, model_name='model4')
+
 
 if __name__ == '__main__':
     main()
