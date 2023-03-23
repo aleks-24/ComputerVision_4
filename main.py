@@ -7,6 +7,7 @@ import numpy as np
 
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, classification_report
 from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix
+from sklearn.model_selection import KFold
 
 # Load the data
 (train_images, train_labels), (test_images, test_labels) = fashion_mnist.load_data()
@@ -151,6 +152,8 @@ def get_model1(baseline_model):
 
 
 def train_and_evaluate_model(model, model_name='model'):
+
+
     history = model.fit(train_images,
                         train_labels,
                         epochs=10,
@@ -165,6 +168,33 @@ def train_and_evaluate_model(model, model_name='model'):
     show_statistics(test_labels, np.argmax(predictions, axis=1), model_name=model_name)
     print(f"test acuracy: {test_acc}, test loss: {test_loss}")
 
+
+def kfold_train_and_evaluate_model(model, model_name='model'):
+    # use kfold to train and evaluate the model
+    kfold = KFold(n_splits=5, shuffle=True)
+    average_scores = []
+    fold_no = 1
+    fold_images = np.concatenate((train_images, val_images))
+    fold_labels = np.concatenate((train_labels, val_labels))
+    for train, test in kfold.split(fold_images, fold_labels):
+        print(f"fold: {fold_no}")
+        history = model.fit(fold_images[train],
+                            fold_labels[train],
+                            epochs=10,
+                            validation_data=(fold_images[test], fold_labels[test]),
+                            batch_size=32,
+                            use_multiprocessing=True,
+                            workers=6)
+        plot_history(history, 'accuracy', y_limit=[0, 1], model_name=model_name)
+        plot_history(history, 'loss', y_limit=[0, 1], model_name=model_name)
+        test_loss, test_acc = model.evaluate(test_images,test_labels, verbose=1)
+        predictions = model.predict(test_images)
+        show_statistics(test_labels, np.argmax(predictions, axis=1), model_name=model_name)
+        print(f"test accuracy for fold: {fold_no}: {test_acc}, test loss: {test_loss}")
+        average_scores.append(test_acc)
+        fold_no = fold_no + 1
+
+    print(f"Average test accuracy: {np.mean(average_scores)}")
 
 def plot_history(history, metric='accuracy', y_limit=[0.5, 1], model_name='model'):
     plt.plot(history.history[metric], label=metric)
@@ -196,12 +226,12 @@ def main():
 
     baseline_model = get_baseline_model()
 
-    train_and_evaluate_model(baseline_model, model_name='baseline_model')
+    #train_and_evaluate_model(baseline_model, model_name='baseline_model')
 
     # baseline model with 1 extra layer in the fully connected layers
     model1 = get_model1(baseline_model)
 
-    train_and_evaluate_model(model1, model_name='model1')
+    kfold_train_and_evaluate_model(model1, model_name='model1')
 
     # baseline model without the last pooling layer
     model2 = get_model2(baseline_model)
