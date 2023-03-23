@@ -3,6 +3,10 @@ import tensorflow as tf
 from keras.datasets import fashion_mnist
 from tensorflow.keras import layers
 import matplotlib.pyplot as plt
+import numpy as np
+
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, classification_report
+from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix
 
 # Load the data
 (train_images, train_labels), (test_images, test_labels) = fashion_mnist.load_data()
@@ -144,6 +148,8 @@ def train_and_evaluate_model(model, model_name='model'):
     plot_history(history, 'accuracy', y_limit=[0, 1], model_name=model_name)
     plot_history(history, 'loss', y_limit=[0, 1], model_name=model_name)
     test_loss, test_acc = model.evaluate(test_images, test_labels, verbose=1)
+    predictions = model.predict(test_images)
+    show_statistics(test_labels, np.argmax(predictions, axis=1), model_name=model_name)
     print(f"test acuracy: {test_acc}, test loss: {test_loss}")
 
 
@@ -155,6 +161,21 @@ def plot_history(history, metric='accuracy', y_limit=[0.5, 1], model_name='model
     plt.ylabel(metric)
     plt.ylim(y_limit)
     plt.legend(loc='lower left')
+    plt.show()
+
+
+def show_statistics(true_label, pred_label, model_name='model'):
+    # print statistics and plot confusion matrix
+    print(model_name)
+    print("------------------------------------------")
+    print(classification_report(true_label, pred_label))
+    print("Accuracy: " + str(accuracy_score(true_label, pred_label)))
+    print("Precision: " + str(precision_score(true_label, pred_label, average='macro', zero_division= 0)))
+    print("Recall: " + str(recall_score(true_label, pred_label, average='macro')))
+    print("F1: " + str(f1_score(true_label, pred_label, average='macro')))
+    print("------------------------------------------")
+
+    ConfusionMatrixDisplay(confusion_matrix(true_label, pred_label)).plot()
     plt.show()
 
 def main():
