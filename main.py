@@ -37,36 +37,30 @@ train_labels = train_labels[48000:]
 def get_baseline_model():
     # Build the model
     model = tf.keras.Sequential()
-    model.add(layers.Conv2D(filters=8,
-                                     kernel_size=(3, 3),
-                                     strides=(1, 1),
-                                     padding='valid',
-                                     activation='relu',
-                                     input_shape=(28, 28, 1)))
-    model.add(layers.BatchNormalization())
-    model.add(layers.Conv2D(filters=16,
-                                     kernel_size=(3, 3),
-                                     strides=(1, 1),
-                                     padding='valid',
-                                     activation='relu'))
-    model.add(layers.MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
-    model.add(layers.Conv2D(filters=32,
-                                     kernel_size=(3, 3),
-                                     strides=(1, 1),
-                                     padding='valid',
-                                     activation='relu'))
-    model.add(layers.MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
+    model.add(layers.Conv2D(64, (3, 3), activation='relu', padding='same', kernel_initializer='he_uniform', input_shape=(28, 28, 1)))
+    model.add(layers.MaxPooling2D((2, 2)))
+    model.add(layers.Conv2D(64, (3, 3), activation='relu', padding='same', kernel_initializer='he_uniform', input_shape=(28, 28, 1)))
+    model.add(layers.MaxPooling2D((2, 2)))
     model.add(layers.Flatten())
-    model.add(layers.Dense(128, activation='relu'))
+    model.add(layers.Dense(128, activation='relu', kernel_initializer='he_uniform'))
+    model.add(layers.Dense(128, activation='relu', kernel_initializer='he_uniform'))
     model.add(layers.Dense(10, activation='softmax'))
     print(model.summary())
 
     compile_model(model)
     return model
 
+def scheduler(epoch, lr):
+    if epoch % 5 == 0 and epoch != 0:
+        lr = lr / 2
+    return lr
+
+
+callback = tf.keras.callbacks.LearningRateScheduler(scheduler, verbose=0)
+
 
 def compile_model(model):
-    model.compile(optimizer='adam',
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
                   loss=tf.keras.losses.SparseCategoricalCrossentropy(),
                   metrics=['accuracy'])
 
@@ -102,15 +96,7 @@ def replace_intermediate_layer(model, layer_id, new_layer):
     return new_model
 
 def get_model4(baseline_model):
-    model4 = replace_intermediate_layer(
-        baseline_model,
-        0,
-        layers.Conv2D(filters=16,
-                      kernel_size=(3, 3),
-                      strides=(1, 1),
-                      padding='valid',
-                      activation='relu',
-                      input_shape=(28, 28, 1)))
+    model4 = insert_layer_after(baseline_model, 6, layers.Dropout(0.5))
     print(model4.summary())
     compile_model(model4)
     return model4
@@ -120,15 +106,6 @@ def get_model3(model):
     compile_model(model3)
     return model3
 
-def get_model2(baseline_model):
-    x2 = tf.keras.layers.Flatten()(baseline_model.layers[-4].output)
-    output = tf.keras.layers.Dense(128, activation='relu')(x2)
-    output = tf.keras.layers.Dense(10, activation='softmax')(output)
-    model2 = tf.keras.Model(inputs=baseline_model.input, outputs=output)
-    print(model2.summary())
-    compile_model(model2)
-    return model2
-
 
 def get_model1(baseline_model):
     model1 = insert_layer_after(baseline_model, 8, tf.keras.layers.Dense(128, activation='relu'))
@@ -137,20 +114,21 @@ def get_model1(baseline_model):
     return model1
 
 
-def train_and_evaluate_model(model, model_name='model'):
+def train_and_evaluate_model(model, model_name='model', callback=None):
     history = model.fit(train_images,
-                        train_labels,
-                        epochs=10,
-                        validation_data=(val_images, val_labels),
-                        batch_size=32,
-                        use_multiprocessing=True,
-                        workers=6)
+                    train_labels,
+                    epochs=15,
+                    validation_data=(val_images, val_labels),
+                    batch_size=128,
+                    use_multiprocessing=True,
+                    workers=6,
+                    callbacks=callback)
+
+
     plot_history(history, 'accuracy', y_limit=[0, 1], model_name=model_name)
     plot_history(history, 'loss', y_limit=[0, 1], model_name=model_name)
-    test_loss, test_acc = model.evaluate(test_images, test_labels, verbose=1)
     predictions = model.predict(test_images)
     show_statistics(test_labels, np.argmax(predictions, axis=1), model_name=model_name)
-    print(f"test acuracy: {test_acc}, test loss: {test_loss}")
 
 
 def plot_history(history, metric='accuracy', y_limit=[0.5, 1], model_name='model'):
@@ -174,8 +152,7 @@ def show_statistics(true_label, pred_label, model_name='model'):
     print("Recall: " + str(recall_score(true_label, pred_label, average='macro')))
     print("F1: " + str(f1_score(true_label, pred_label, average='macro')))
     print("------------------------------------------")
-
-    ConfusionMatrixDisplay(confusion_matrix(true_label, pred_label)).plot()
+    ConfusionMatrixDisplay(confusion_matrix(true_label, pred_label), display_labels=class_names).plot()
     plt.show()
 
 def main():
@@ -183,19 +160,18 @@ def main():
 
     train_and_evaluate_model(baseline_model, model_name='baseline_model')
 
-    # baseline model with 1 extra layer in the fully connected layers
-    model1 = get_model1(baseline_model)
-
-    train_and_evaluate_model(model1, model_name='model1')
-
-    # baseline model without the last pooling layer
-    model2 = get_model2(baseline_model)
-    train_and_evaluate_model(model2, model_name='model2')
-
-    # baseline model with a dropout layer
-    model3 = get_model3(baseline_model)
-    train_and_evaluate_model(model3, model_name='model3')
-
+    # # baseline model with 1 extra layer in the fully connected layers
+    # model1 = get_model1(baseline_model)
+    # train_and_evaluate_model(model1, model_name='model1')
+    #
+    # # baseline model without the last pooling layer
+    # model2 = get_baseline_model()
+    # train_and_evaluate_model(model2, model_name='model2', callback=[callback])
+    #
+    # # baseline model with a dropout layer
+    # model3 = get_model3(baseline_model)
+    # train_and_evaluate_model(model3, model_name='model3')
+    #
     model4 = get_model4(baseline_model)
     train_and_evaluate_model(model4, model_name='model4')
 
