@@ -143,12 +143,10 @@ def get_model_augmentation(baseline_model, load_model=False):
     # augment the training data
     if not load_model:
         data_augmentation = tf.keras.Sequential([
-            layers.experimental.preprocessing.RandomFlip("horizontal",
-                                                         input_shape=(28,
-                                                                      28,
-                                                                      1)),
+            layers.RandomFlip("horizontal",
+                              input_shape=(28, 28, 1)),
             layers.GaussianNoise(0.1),
-            layers.experimental.preprocessing.RandomContrast(0.1)
+            layers.RandomContrast(0.1)
         ])
         model_augmentation = insert_layer_after(baseline_model, 0, data_augmentation)
         compile_model(model_augmentation)
@@ -287,27 +285,27 @@ def main():
 
     #
     baseline_model = get_baseline_model(load_model=LoadModelFromDisk)
-    load_and_test_model(LoadModelFromDisk, baseline_model, 'baseline_model')
-
-    # model with smaller learning rate
-    model1 = get_model1(load_model=LoadModelFromDisk)
-    load_and_test_model(LoadModelFromDisk, model1, 'model1')
-
-    # model with batch normalization
-    model2 = get_model2(baseline_model, load_model=LoadModelFromDisk)
-    load_and_test_model(LoadModelFromDisk, model2, 'model2')
-
-    # model with one more dense layer
-    model3 = get_model3(baseline_model, load_model=LoadModelFromDisk)
-    load_and_test_model(LoadModelFromDisk, model3, 'model3')
-
-    # baseline model with dropout
-    model4 = get_model4(baseline_model, load_model=LoadModelFromDisk)
-    load_and_test_model(LoadModelFromDisk, model4, 'model4')
-
-    # baseline model with reducing learning rate
-    model_learning_rate = get_baseline_model(load_model=LoadModelFromDisk)
-    load_and_test_model(LoadModelFromDisk, model_learning_rate, 'model_learning_rate', callback=callback)
+    # load_and_test_model(LoadModelFromDisk, baseline_model, 'baseline_model')
+    #
+    # # model with smaller learning rate
+    # model1 = get_model1(load_model=LoadModelFromDisk)
+    # load_and_test_model(LoadModelFromDisk, model1, 'model1')
+    #
+    # # model with batch normalization
+    # model2 = get_model2(baseline_model, load_model=LoadModelFromDisk)
+    # load_and_test_model(LoadModelFromDisk, model2, 'model2')
+    #
+    # # model with one more dense layer
+    # model3 = get_model3(baseline_model, load_model=LoadModelFromDisk)
+    # load_and_test_model(LoadModelFromDisk, model3, 'model3')
+    #
+    # # baseline model with dropout
+    # model4 = get_model4(baseline_model, load_model=LoadModelFromDisk)
+    # load_and_test_model(LoadModelFromDisk, model4, 'model4')
+    #
+    # # baseline model with reducing learning rate
+    # model_learning_rate = get_baseline_model(load_model=LoadModelFromDisk)
+    # load_and_test_model(LoadModelFromDisk, model_learning_rate, 'model_learning_rate', callback=callback)
 
     # model with data augmentation
     model_augmentation = get_model_augmentation(baseline_model, load_model=LoadModelFromDisk)
