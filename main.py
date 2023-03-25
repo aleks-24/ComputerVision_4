@@ -1,7 +1,10 @@
 import tensorflow as tf
+from tensorflow import keras
+import keras_tuner as kt
 
 from keras.datasets import fashion_mnist
-from tensorflow.keras import layers
+from keras import layers
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -10,9 +13,9 @@ from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix
 from sklearn.model_selection import KFold
 
 # Load the data
-(train_images, train_labels), (test_images, test_labels) = fashion_mnist.load_data()
+(all_images, all_labels), (test_images, test_labels) = fashion_mnist.load_data()
 
-train_images, c_test = train_images / 255.0, test_images / 255.0
+all_images, c_test = all_images / 255.0, test_images / 255.0
 
 class_names = ['T-shirt/top', 'Trouser', 'Pullover', 'Dress', 'Coat',
                'Sandal', 'Shirt', 'Sneaker', 'Bag', 'Ankle boot']
@@ -23,16 +26,17 @@ for i in range(25):
     plt.xticks([])
     plt.yticks([])
     plt.grid(False)
-    plt.imshow(train_images[i], cmap=plt.cm.binary)
-    plt.xlabel(class_names[train_labels[i]])
+    plt.imshow(all_images[i], cmap=plt.cm.binary)
+    plt.xlabel(class_names[all_labels[i]])
+plt.savefig('images/fashion_mnist.png')
 plt.show()
 
 # split train in validation and train set
 
-val_images = train_images[:12000]
-val_labels = train_labels[:12000]
-train_images = train_images[48000:]
-train_labels = train_labels[48000:]
+val_images = all_images[:12000]
+val_labels = all_labels[:12000]
+train_images = all_images[48000:]
+train_labels = all_labels[48000:]
 
 
 def get_baseline_model(load_model=False):
@@ -54,19 +58,6 @@ def get_baseline_model(load_model=False):
         model = tf.keras.models.load_model('baseline_model')
     return model
 
-def scheduler(epoch, lr):
-    if epoch % 5 == 0 and epoch != 0:
-        lr = lr / 2
-    return lr
-
-
-callback = tf.keras.callbacks.LearningRateScheduler(scheduler, verbose=0)
-
-
-def compile_model(model):
-    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
-                  loss=tf.keras.losses.SparseCategoricalCrossentropy(),
-                  metrics=['accuracy'])
 
 
 # inserting layer according to:
@@ -111,17 +102,44 @@ def get_model4(baseline_model, load_model=False):
     return model4
 
 
-def get_model3(model, load_model=False):
+def get_kfold_model(load_model=False):
     if not load_model:
-        model3 = insert_layer_after(model, 8, layers.Dropout(0.5))
-        compile_model(model3)
+        tuner = kt.Hyperband(model_builder,
+                             objective='val_accuracy',
+                             max_epochs=15,
+                             factor=3,
+                             directory='hyperband',
+                             project_name='ComputerVision4')
+        stop_early = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=5)
+        tuner.search(all_images, all_labels, epochs=15, validation_split=0.2, callbacks=[stop_early])
+
+        # Get the optimal hyperparameters
+        best_hps = tuner.get_best_hyperparameters(num_trials=1)[0]
+
+        print(f"""
+        The hyperparameter search is complete. The optimal learning rate for the optimizer
+        is {best_hps.get('learning_rate')}.
+        """)
+        model_kfold = tuner.hypermodel.build(best_hps)
+        model_kfold.save('model_kfold')
+
     else:
-        model3 = tf.keras.models.load_model('model3')
-    print(model3.summary())
-    return model3
+        model_kfold = tf.keras.models.load_model('model_kfold')
+    print(model_kfold.summary())
+    return model_kfold
+
+def model_builder(hp):
+    model_kfold = get_baseline_model(load_model=False)
+    hp_learning_rate = hp.Choice('learning_rate', values=[1e-2, 1e-3, 1e-4])
+    model_kfold.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=hp_learning_rate),
+                  loss='sparse_categorical_crossentropy',
+                  metrics=['accuracy'])
+    return model_kfold
 
 
-def get_model1(baseline_model, load_model=False):
+
+
+def get_model_augmentation(baseline_model, load_model=False):
     # augment the training data
     if not load_model:
         data_augmentation = tf.keras.Sequential([
@@ -132,12 +150,27 @@ def get_model1(baseline_model, load_model=False):
             layers.GaussianNoise(0.1),
             layers.experimental.preprocessing.RandomContrast(0.1)
         ])
-        model1 = insert_layer_after(baseline_model, 0, data_augmentation)
-        compile_model(model1)
+        model_augmentation = insert_layer_after(baseline_model, 0, data_augmentation)
+        compile_model(model_augmentation)
     else:
-        model1 = tf.keras.models.load_model('model1')
-    print(model1.summary())
-    return model1
+        model_augmentation = tf.keras.models.load_model('model_augmentation')
+    print(model_augmentation.summary())
+    return model_augmentation
+
+def scheduler(epoch, lr):
+    if epoch % 5 == 0 and epoch != 0:
+        lr = lr / 2
+    return lr
+
+
+callback = tf.keras.callbacks.LearningRateScheduler(scheduler, verbose=0)
+
+
+def compile_model(model):
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
+                  loss=tf.keras.losses.SparseCategoricalCrossentropy(),
+                  metrics=['accuracy'])
+
 
 
 def train_and_evaluate_model(model, model_name='model', callback=None, load_model=False):
@@ -193,6 +226,7 @@ def plot_history(history, metric='accuracy', y_limit=[0.5, 1], model_name='model
     plt.ylabel(metric)
     plt.ylim(y_limit)
     plt.legend(loc='lower left')
+    plt.savefig(f'images/{model_name}_{metric}.png')
     plt.show()
 
 
@@ -206,33 +240,82 @@ def show_statistics(true_label, pred_label, model_name='model'):
     print("Recall: " + str(recall_score(true_label, pred_label, average='macro')))
     print("F1: " + str(f1_score(true_label, pred_label, average='macro')))
     print("------------------------------------------")
-    ConfusionMatrixDisplay(confusion_matrix(true_label, pred_label), display_labels=class_names).plot()
+    ConfusionMatrixDisplay.from_predictions(true_label, pred_label, display_labels=class_names, xticks_rotation=25)
+    plt.tight_layout()
+    plt.savefig(f'images/{model_name}_confusion_matrix.png')
     plt.show()
 
 
+def get_model1(load_model):
+    if not load_model:
+        model1 = get_baseline_model()
+        model1.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.3e-3),
+                      loss=tf.keras.losses.SparseCategoricalCrossentropy(),
+                      metrics=['accuracy'])
+    else:
+        model1 = tf.keras.models.load_model('model1')
+    print(model1.summary())
+    return model1
+
+
+def get_model2(model, load_model):
+    if not load_model:
+        model2 = get_baseline_model()
+        model2 = insert_layer_after(model2, 1, tf.keras.layers.BatchNormalization())
+        compile_model(model2)
+    else:
+        model2 = tf.keras.models.load_model('model2')
+    print(model2.summary())
+    return model2
+
+
+def get_model3(model, load_model):
+    if not load_model:
+        model3 = replace_intermediate_layer(model, 5,
+                                            tf.keras.layers.Dense(128,
+                                                                  activation='relu',
+                                                                  kernel_regularizer=tf.keras.regularizers.l2(0.001)))
+        compile_model(model3)
+    else:
+        model3 = tf.keras.models.load_model('model3')
+    print(model3.summary())
+    return model3
+
+
 def main():
-    LoadModelFromDisk = True
+    LoadModelFromDisk = False
 
-
+    #
     baseline_model = get_baseline_model(load_model=LoadModelFromDisk)
     load_and_test_model(LoadModelFromDisk, baseline_model, 'baseline_model')
 
-    # model with data augmentation
-    model1 = get_model1(baseline_model, load_model=LoadModelFromDisk)
+    # model with smaller learning rate
+    model1 = get_model1(load_model=LoadModelFromDisk)
     load_and_test_model(LoadModelFromDisk, model1, 'model1')
 
-    # baseline model with reducing learning rate
-    model2 = get_baseline_model(load_model=LoadModelFromDisk)
-    load_and_test_model(LoadModelFromDisk, model2, 'model2', callback=callback)
+    # model with batch normalization
+    model2 = get_model2(baseline_model, load_model=LoadModelFromDisk)
+    load_and_test_model(LoadModelFromDisk, model2, 'model2')
 
-
-    # baseline model with kfold cross validation
+    # model with one more dense layer
     model3 = get_model3(baseline_model, load_model=LoadModelFromDisk)
-    load_and_test_model(LoadModelFromDisk, model3, 'model3', kfold=True)
+    load_and_test_model(LoadModelFromDisk, model3, 'model3')
 
     # baseline model with dropout
     model4 = get_model4(baseline_model, load_model=LoadModelFromDisk)
     load_and_test_model(LoadModelFromDisk, model4, 'model4')
+
+    # baseline model with reducing learning rate
+    model_learning_rate = get_baseline_model(load_model=LoadModelFromDisk)
+    load_and_test_model(LoadModelFromDisk, model_learning_rate, 'model_learning_rate', callback=callback)
+
+    # model with data augmentation
+    model_augmentation = get_model_augmentation(baseline_model, load_model=LoadModelFromDisk)
+    load_and_test_model(LoadModelFromDisk, model_augmentation, 'model_augmentation')
+    #
+    # # # baseline model with kfold cross validation
+    # model_cross_validation = get_kfold_model(load_model=LoadModelFromDisk)
+    # load_and_test_model(LoadModelFromDisk, model_cross_validation, 'model Cross-Validation')
 
 
 def load_and_test_model(LoadModelFromDisk, model, model_name, callback=None, kfold=False):
