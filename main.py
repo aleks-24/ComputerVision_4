@@ -111,7 +111,8 @@ def get_hyper_model(load_model=False):
                              directory='hyperband',
                              project_name='ComputerVision4')
         stop_early = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=5)
-        tuner.search(all_images, all_labels, epochs=15, validation_split=0.2, callbacks=[stop_early])
+        tuner.search(all_images, all_labels, epochs=15, validation_split=0.2, callbacks=[stop_early], use_multiprocessing=True,
+                        workers= 6)
 
         # Get the optimal hyperparameters
         best_hps = tuner.get_best_hyperparameters(num_trials=1)[0]
@@ -142,13 +143,22 @@ def model_builder(hp):
 def get_model_augmentation(baseline_model, load_model=False):
     # augment the training data
     if not load_model:
-        data_augmentation = tf.keras.Sequential([
-            layers.RandomFlip("horizontal",
-                              input_shape=(28, 28, 1)),
-            layers.GaussianNoise(0.1),
-            layers.RandomContrast(0.1)
-        ])
-        model_augmentation = insert_layer_after(baseline_model, 0, data_augmentation)
+        model_augmentation = tf.keras.Sequential()
+        model_augmentation.add(layers.RandomFlip("horizontal", input_shape=(28, 28, 1)))
+        model_augmentation.add(layers.GaussianNoise(0.1))
+        model_augmentation.add(layers.RandomContrast(0.1))
+        model_augmentation.add(layers.Conv2D(64, (3, 3), activation='relu', padding='same', kernel_initializer='he_uniform',
+                                input_shape=(28, 28, 1)))
+        model_augmentation.add(layers.MaxPooling2D((2, 2)))
+        model_augmentation.add(layers.Conv2D(64, (3, 3), activation='relu', padding='same', kernel_initializer='he_uniform',
+                                input_shape=(28, 28, 1)))
+        model_augmentation.add(layers.MaxPooling2D((2, 2)))
+        model_augmentation.add(layers.Flatten())
+        model_augmentation.add(layers.Dense(128, activation='relu', kernel_initializer='he_uniform'))
+        model_augmentation.add(layers.Dense(128, activation='relu', kernel_initializer='he_uniform'))
+        model_augmentation.add(layers.Dense(10, activation='softmax'))
+        print(model_augmentation.summary())
+
         compile_model(model_augmentation)
     else:
         model_augmentation = tf.keras.models.load_model('model_augmentation')
@@ -289,6 +299,26 @@ def get_model3(model, load_model):
     return model3
 
 
+def get_kfold_model(load_model):
+    if not load_model:
+        model_kfold = get_baseline_model()
+        compile_model(model_kfold)
+    else:
+        model_kfold = tf.keras.models.load_model('model_kfold')
+    print(model_kfold.summary())
+    return model_kfold
+
+
+def get_learning_rate_model(load_model):
+    if not load_model:
+        model_learning_rate = get_baseline_model()
+        compile_model(model_learning_rate)
+    else:
+        model_learning_rate = tf.keras.models.load_model('model_learning_rate')
+    print(model_learning_rate.summary())
+    return model_learning_rate
+
+
 def main():
     LoadModelFromDisk = False
     #
@@ -311,13 +341,16 @@ def main():
     # model4 = get_model4(baseline_model, load_model=LoadModelFromDisk)
     # load_and_test_model(LoadModelFromDisk, model4, 'model4_all_data', all_data=True)
     # #
-    # # baseline model with reducing learning rate
-    # model_learning_rate = get_baseline_model(load_model=LoadModelFromDisk)
-    # load_and_test_model(LoadModelFromDisk, model_learning_rate, 'model_learning_rate', callback=callback)
+    # baseline model with reducing learning rate
+    model_learning_rate = get_learning_rate_model(load_model=LoadModelFromDisk)
+    load_and_test_model(LoadModelFromDisk, model_learning_rate, 'model_learning_rate', callback=callback)
     #
     # # model with data augmentation
     # model_augmentation = get_model_augmentation(baseline_model, load_model=LoadModelFromDisk)
     # load_and_test_model(LoadModelFromDisk, model_augmentation, 'model_augmentation')
+
+    kfold_model = get_kfold_model(load_model=LoadModelFromDisk)
+    load_and_test_model(LoadModelFromDisk, kfold_model, 'model_kfold', kfold=True)
 
     # # baseline model with kfold cross validation
     model_hyper = get_hyper_model(load_model=LoadModelFromDisk)
