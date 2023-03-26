@@ -102,7 +102,7 @@ def get_model4(baseline_model, load_model=False):
     return model4
 
 
-def get_kfold_model(load_model=False):
+def get_hyper_model(load_model=False):
     if not load_model:
         tuner = kt.Hyperband(model_builder,
                              objective='val_accuracy',
@@ -120,13 +120,13 @@ def get_kfold_model(load_model=False):
         The hyperparameter search is complete. The optimal learning rate for the optimizer
         is {best_hps.get('learning_rate')}.
         """)
-        model_kfold = tuner.hypermodel.build(best_hps)
-        model_kfold.save('model_kfold')
+        model_hyper = tuner.hypermodel.build(best_hps)
+        model_hyper.save('model_hyper')
 
     else:
-        model_kfold = tf.keras.models.load_model('model_kfold')
-    print(model_kfold.summary())
-    return model_kfold
+        model_hyper = tf.keras.models.load_model('model_hyper')
+    print(model_hyper.summary())
+    return model_hyper
 
 def model_builder(hp):
     model_kfold = get_baseline_model(load_model=False)
@@ -172,7 +172,7 @@ def compile_model(model):
 
 
 def train_and_evaluate_model(model, model_name='model', callback=None, load_model=False, all_data=False):
-    if not load_model:
+    if not load_model and not all_data:
         history = model.fit(train_images,
                         train_labels,
                         epochs=15,
@@ -194,8 +194,6 @@ def train_and_evaluate_model(model, model_name='model', callback=None, load_mode
                         use_multiprocessing=True,
                         workers=6,
                         callbacks=callback)
-        plot_history(history, 'accuracy', y_limit=[0, 1], model_name=model_name)
-        plot_history(history, 'loss', y_limit=[0, 1], model_name=model_name)
     predictions = model.predict(test_images)
     show_statistics(test_labels, np.argmax(predictions, axis=1), model_name=model_name)
 
@@ -294,36 +292,36 @@ def get_model3(model, load_model):
 def main():
     LoadModelFromDisk = False
     #
-    baseline_model = get_baseline_model(load_model=LoadModelFromDisk)
-    load_and_test_model(LoadModelFromDisk, baseline_model, 'baseline_model')
+    #baseline_model = get_baseline_model(load_model=LoadModelFromDisk)
+    #load_and_test_model(LoadModelFromDisk, baseline_model, 'baseline_model_all_data', all_data=True)
     #
-    # model with smaller learning rate
-    model1 = get_model1(load_model=LoadModelFromDisk)
-    load_and_test_model(LoadModelFromDisk, model1, 'model1')
-
-    # model with batch normalization
-    model2 = get_model2(baseline_model, load_model=LoadModelFromDisk)
-    load_and_test_model(LoadModelFromDisk, model2, 'model2')
-
-    # model with one more dense layer
-    model3 = get_model3(baseline_model, load_model=LoadModelFromDisk)
-    load_and_test_model(LoadModelFromDisk, model3, 'model3')
+    # # model with smaller learning rate
+    # model1 = get_model1(load_model=LoadModelFromDisk)
+    # load_and_test_model(LoadModelFromDisk, model1, 'model1')
+    #
+    # # model with batch normalization
+    # model2 = get_model2(baseline_model, load_model=LoadModelFromDisk)
+    # load_and_test_model(LoadModelFromDisk, model2, 'model2')
+    #
+    # # model with one more dense layer
+    # model3 = get_model3(baseline_model, load_model=LoadModelFromDisk)
+    # load_and_test_model(LoadModelFromDisk, model3, 'model3')
 
     # baseline model with dropout
-    model4 = get_model4(baseline_model, load_model=LoadModelFromDisk)
-    load_and_test_model(LoadModelFromDisk, model4, 'model4')
+    # model4 = get_model4(baseline_model, load_model=LoadModelFromDisk)
+    # load_and_test_model(LoadModelFromDisk, model4, 'model4_all_data', all_data=True)
+    # #
+    # # baseline model with reducing learning rate
+    # model_learning_rate = get_baseline_model(load_model=LoadModelFromDisk)
+    # load_and_test_model(LoadModelFromDisk, model_learning_rate, 'model_learning_rate', callback=callback)
     #
-    # baseline model with reducing learning rate
-    model_learning_rate = get_baseline_model(load_model=LoadModelFromDisk)
-    load_and_test_model(LoadModelFromDisk, model_learning_rate, 'model_learning_rate', callback=callback)
+    # # model with data augmentation
+    # model_augmentation = get_model_augmentation(baseline_model, load_model=LoadModelFromDisk)
+    # load_and_test_model(LoadModelFromDisk, model_augmentation, 'model_augmentation')
 
-    # model with data augmentation
-    model_augmentation = get_model_augmentation(baseline_model, load_model=LoadModelFromDisk)
-    load_and_test_model(LoadModelFromDisk, model_augmentation, 'model_augmentation')
-
-    # # # baseline model with kfold cross validation
-    # model_cross_validation = get_kfold_model(load_model=LoadModelFromDisk)
-    # load_and_test_model(LoadModelFromDisk, model_cross_validation, 'model Cross-Validation')
+    # # baseline model with kfold cross validation
+    model_hyper = get_hyper_model(load_model=LoadModelFromDisk)
+    load_and_test_model(LoadModelFromDisk, model_hyper, 'model hyperparameter tuning')
 
 
 def load_and_test_model(LoadModelFromDisk, model, model_name, callback=None, kfold=False, all_data=False):
