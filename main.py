@@ -47,7 +47,7 @@ def scheduler(epoch, lr):
         lr = lr / 2
     return lr
 
-# callback for the fit funcion
+# callback for the fit function
 callback = tf.keras.callbacks.LearningRateScheduler(scheduler, verbose=0)
 
 
