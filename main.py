@@ -171,7 +171,7 @@ def compile_model(model):
 
 
 
-def train_and_evaluate_model(model, model_name='model', callback=None, load_model=False):
+def train_and_evaluate_model(model, model_name='model', callback=None, load_model=False, all_data=False):
     if not load_model:
         history = model.fit(train_images,
                         train_labels,
@@ -183,6 +183,17 @@ def train_and_evaluate_model(model, model_name='model', callback=None, load_mode
                         callbacks=callback)
 
 
+        plot_history(history, 'accuracy', y_limit=[0, 1], model_name=model_name)
+        plot_history(history, 'loss', y_limit=[0, 1], model_name=model_name)
+
+    if all_data:
+        history = model.fit(all_images,
+                        all_labels,
+                        epochs=15,
+                        batch_size=128,
+                        use_multiprocessing=True,
+                        workers=6,
+                        callbacks=callback)
         plot_history(history, 'accuracy', y_limit=[0, 1], model_name=model_name)
         plot_history(history, 'loss', y_limit=[0, 1], model_name=model_name)
     predictions = model.predict(test_images)
@@ -281,11 +292,11 @@ def get_model3(model, load_model):
 
 
 def main():
-    LoadModelFromDisk = False
+    LoadModelFromDisk = True
 
     #
     baseline_model = get_baseline_model(load_model=LoadModelFromDisk)
-    # load_and_test_model(LoadModelFromDisk, baseline_model, 'baseline_model')
+    load_and_test_model(LoadModelFromDisk, baseline_model, 'baseline_model_all_data', all_data=True)
     #
     # # model with smaller learning rate
     # model1 = get_model1(load_model=LoadModelFromDisk)
@@ -299,32 +310,32 @@ def main():
     # model3 = get_model3(baseline_model, load_model=LoadModelFromDisk)
     # load_and_test_model(LoadModelFromDisk, model3, 'model3')
     #
-    # # baseline model with dropout
-    # model4 = get_model4(baseline_model, load_model=LoadModelFromDisk)
-    # load_and_test_model(LoadModelFromDisk, model4, 'model4')
+    # baseline model with dropout
+    model4 = get_model4(baseline_model, load_model=LoadModelFromDisk)
+    load_and_test_model(LoadModelFromDisk, model4, 'model4_all_data', all_data=True)
     #
     # # baseline model with reducing learning rate
     # model_learning_rate = get_baseline_model(load_model=LoadModelFromDisk)
     # load_and_test_model(LoadModelFromDisk, model_learning_rate, 'model_learning_rate', callback=callback)
 
-    # model with data augmentation
-    model_augmentation = get_model_augmentation(baseline_model, load_model=LoadModelFromDisk)
-    load_and_test_model(LoadModelFromDisk, model_augmentation, 'model_augmentation')
+    # # model with data augmentation
+    # model_augmentation = get_model_augmentation(baseline_model, load_model=LoadModelFromDisk)
+    # load_and_test_model(LoadModelFromDisk, model_augmentation, 'model_augmentation')
     #
     # # # baseline model with kfold cross validation
     # model_cross_validation = get_kfold_model(load_model=LoadModelFromDisk)
     # load_and_test_model(LoadModelFromDisk, model_cross_validation, 'model Cross-Validation')
 
 
-def load_and_test_model(LoadModelFromDisk, model, model_name, callback=None, kfold=False):
+def load_and_test_model(LoadModelFromDisk, model, model_name, callback=None, kfold=False, all_data=False):
     if not LoadModelFromDisk:
         if kfold:
             kfold_train_and_evaluate_model(model, model_name=model_name)
         else:
-            train_and_evaluate_model(model, model_name=model_name, callback=callback, load_model=False)
+            train_and_evaluate_model(model, model_name=model_name, callback=callback, load_model=False, all_data=all_data)
         model.save(model_name)
     else:
-        train_and_evaluate_model(model, model_name=model_name, callback=callback, load_model=True)
+        train_and_evaluate_model(model, model_name=model_name, callback=callback, load_model=True, all_data=all_data)
     return model
 
 
